@@ -795,6 +795,11 @@ class OccContext implements Context {
 	public function theCommandShouldHaveBeenSuccessful():void {
 		$exceptions = $this->featureContext->findExceptions();
 		$exitStatusCode = $this->featureContext->getExitStatusCodeOfOccCommand();
+		$commandOutput = $this->featureContext->getStdOutOfOccCommand();
+		$commandError = $this->featureContext->getStdErrOfOccCommand();
+		print($exitStatusCode);
+		print($commandOutput);
+		print($commandError);
 		if ($exitStatusCode !== 0) {
 			$msg = "The command was not successful, exit code was " .
 				$exitStatusCode . ".\n" .
@@ -3138,6 +3143,105 @@ class OccContext implements Context {
 		foreach ($commandOutput as $entry) {
 			Assert::assertNotEquals($mountPoint, $entry->mount_point);
 		}
+	}
+
+	/**
+	 * @Given the administrator has changed the database type to :dbType
+	 * 
+	 * @param string $dbType
+	 *
+	 * @return void
+	 * @throws Exception
+	 */
+	public function theAdministratorHasChangedTheDatabaseType(string $dbType): void {
+		$this->theAdministratorChangesTheDatabaseType($dbType);
+		$exitStatusCode = $this->featureContext->getExitStatusCodeOfOccCommand();
+
+		if ($exitStatusCode !== 0) {
+			$exceptions = $this->featureContext->findExceptions();
+			$commandErr = $this->featureContext->getStdErrOfOccCommand();
+			$sameTypeError = "Can not convert from $dbType to $dbType.";
+			$lines = SetupHelper::findLines(
+				$commandErr,
+				$sameTypeError
+			);
+			// pass if the same type error is found
+			if (count($lines) !== 0) {
+				$msg = "The command was not successful, exit code was " .
+					$exitStatusCode . ".\n" .
+					"stdOut was: '" .
+					$this->featureContext->getStdOutOfOccCommand() . "'\n" .
+					"stdErr was: '". $commandErr . "'\n";
+				if (!empty($exceptions)) {
+					$msg .= ' Exceptions: ' . \implode(', ', $exceptions);
+				}
+				throw new Exception($msg);
+			}
+		}
+	}
+
+	/**
+	 * @When the administrator changes the database type to :dbType
+	 * @When the administrator triese to change the database type to :dbType
+	 * 
+	 * @param string $dbType
+	 *
+	 * @return void
+	 */
+	public function theAdministratorChangesTheDatabaseType(string $dbType): void {
+		$dbUser = "owncloud";
+		$dbHost = $dbType;
+		$dbName = "owncloud";
+		$dbPass = "owncloud";
+
+		if ($dbType === "postgres") {
+			$dbType = "pgsql";
+		}
+		if ($dbType === "oracle") {
+			$dbUser = "autotest";
+			$dbType = "oci";
+		}
+
+		$command = "db:convert-type $dbType $dbUser $dbHost $dbName";
+
+		$this->executeOccWithUserInput($command, $dbPass);
+	}
+
+	/**
+	 * 
+	 * @param string $command
+	 * @param string $userInput
+	 * @param array|null $envVariables
+	 *
+	 * @return void
+	 */
+	public function executeOccWithUserInput(string $command, string $userInput, array $envVariables = null): void{
+		// $descriptor = [
+		// 	0 => ['pipe', 'r'],
+		// 	1 => ['pipe', 'w'],
+		// 	2 => ['pipe', 'w'],
+		// ];
+
+		// $process = \proc_open(
+		// 	"echo '$userInput' | sudo -u www-data php occ " . $command,
+		// 	$descriptor,
+		// 	$pipes,
+		// 	\realpath(""),
+		// 	$envVariables
+		// );
+		// $lastStdOut = \stream_get_contents($pipes[1]);
+		// $lastStdErr = \stream_get_contents($pipes[2]);
+		// $lastCode = \proc_close($process);
+		// $result = [
+		// 	"code" => $lastCode,
+		// 	"stdOut" => $lastStdOut,
+		// 	"stdErr" => $lastStdErr
+		// ];
+		// print($lastStdOut);
+		// print($lastStdErr);
+		// $this->featureContext->setResultOfOccCommand($result);
+		\exec("echo '$userInput' | ./occ " . $command, $output, $status);
+		var_dump($output);
 	}
 
 	/**
